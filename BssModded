@@ -1,0 +1,367 @@
+--[[
+    XIOWUGPT BEE SWARM CLONE - RAYFIELD GUI FINAL V2
+    ANTI RESET SPEED SUPER CEPAT (Heartbeat)
+    + Teleport Field + Hive
+--]]
+
+local player = game.Players.LocalPlayer
+local workspace = game:GetService("Workspace")
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- ========== FIELD LIST ==========
+local FIELD_LIST = {
+    "Mountain Top Field",
+    "Coconut Field", 
+    "Cactus Field",
+    "Bamboo Field",
+    "Strawberry Field",
+    "Rose Field",
+    "Blue Flower Field",
+    "Sunflower Field",
+    "Clover Field",
+    "Red Brick Field",
+    "Blue Brick Field",
+    "White Brick Field",
+    "Mixed Brick Field",
+    "Ant Field",
+    "Spider Field",
+    "Mushroom Field",
+    "Dandelion Field",
+    "Hub Field",
+    "Stump Field",
+    "Pineapple Patch",
+    "Pine Tree Forest"
+}
+
+-- ========== FUNGSI CARI FIELD ==========
+local function FindField(fieldName)
+    local folder = workspace:FindFirstChild("fields")
+    if folder then
+        for _, v in ipairs(folder:GetChildren()) do
+            if v:IsA("BasePart") and v.Name == fieldName then
+                return v.Position + Vector3.new(0, 5, 0)
+            end
+        end
+    end
+    for _, v in ipairs(workspace:GetChildren()) do
+        if v:IsA("BasePart") and v.Name == fieldName then
+            return v.Position + Vector3.new(0, 5, 0)
+        end
+    end
+    return nil
+end
+
+-- ========== FUNGSI CARI HIVE PRIBADI ==========
+local function FindMyHive()
+    local honeycombs = workspace:FindFirstChild("Honeycombs")
+    if not honeycombs then return nil end
+    
+    for _, hive in ipairs(honeycombs:GetChildren()) do
+        if hive:IsA("Model") then
+            for _, child in ipairs(hive:GetChildren()) do
+                if child.Name == player.Name then
+                    return hive
+                end
+            end
+        end
+    end
+    
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == player.Name and obj.Parent then
+            local parent = obj.Parent
+            if parent.Parent and parent.Parent.Name == "Honeycombs" then
+                return parent
+            end
+        end
+    end
+    
+    return nil
+end
+
+-- ========== TELEPORT ==========
+local function Teleport(fieldName)
+    local pos = FindField(fieldName)
+    if not pos then return false end
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return false end
+    player.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
+    return true
+end
+
+-- ========== TELEPORT KE HIVE ==========
+local function TeleportToMyHive()
+    local myHive = FindMyHive()
+    if not myHive then return false end
+    
+    for _, part in ipairs(myHive:GetChildren()) do
+        if part:IsA("BasePart") then
+            local pos = part.Position + Vector3.new(0, 5, 0)
+            if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return false end
+            player.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
+            
+            task.wait(0.3)
+            
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                firetouchinterest(player.Character.HumanoidRootPart, part, 0)
+                firetouchinterest(player.Character.HumanoidRootPart, part, 1)
+            end
+            
+            -- Coba remote claimHive
+            local remoteEvents = replicatedStorage:FindFirstChild("remoteEvents")
+            if remoteEvents then
+                local claimHive = remoteEvents:FindFirstChild("claimHive")
+                if claimHive then
+                    claimHive:FireServer()
+                end
+            end
+            
+            return true
+        end
+    end
+    
+    return false
+end
+
+-- ========== SPEED & JUMP VARIABEL ==========
+local speedEnabled = true
+local targetSpeed = 50
+local targetJump = 100
+local speedConnection = nil
+
+-- ========== FUNGSI ANTI RESET (HEARTBEAT - 60X/DETIK) ==========
+local function StartAntiReset()
+    if speedConnection then
+        speedConnection:Disconnect()
+    end
+    
+    speedConnection = RunService.Heartbeat:Connect(function()
+        if not speedEnabled then return end
+        
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            local hum = char.Humanoid
+            
+            -- Force speed setiap frame
+            if hum.WalkSpeed ~= targetSpeed then
+                hum.WalkSpeed = targetSpeed
+            end
+            
+            -- Force jump setiap frame
+            if hum.JumpPower ~= targetJump then
+                hum.JumpPower = targetJump
+                hum.UseJumpPower = true
+            end
+        end
+    end)
+end
+
+local function StopAntiReset()
+    if speedConnection then
+        speedConnection:Disconnect()
+        speedConnection = nil
+    end
+    -- Balikin ke normal
+    local char = player.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.WalkSpeed = 16
+        char.Humanoid.JumpPower = 50
+    end
+end
+
+-- ========== LOAD RAYFIELD ==========
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "XIOWUGPT | Bee Swarm Hub V2",
+    LoadingTitle = "XIOWUGPT Loading...",
+    LoadingSubtitle = "by XIOWU DEVELOPER",
+    Theme = "DarkBlue",
+    ConfigurationSaving = { Enabled = false },
+    KeySystem = false
+})
+
+-- ==========================================
+-- TAB 1: TELEPORT
+-- ==========================================
+local TeleportTab = Window:CreateTab("🗺️ Teleport", nil)
+
+TeleportTab:CreateSection("Teleport ke Field")
+
+local selectedField = FIELD_LIST[1]
+
+TeleportTab:CreateDropdown({
+    Name = "Pilih Field",
+    Options = FIELD_LIST,
+    CurrentOption = FIELD_LIST[1],
+    Flag = "FieldSelect",
+    Callback = function(Option)
+        selectedField = Option
+    end,
+})
+
+TeleportTab:CreateButton({
+    Name = "🚀 Teleport ke Field",
+    Callback = function()
+        local success = Teleport(selectedField)
+        if success then
+            Rayfield:Notify({ Title = "Sukses", Content = "Teleported ke " .. selectedField, Duration = 2 })
+        else
+            Rayfield:Notify({ Title = "Error", Content = "Field ga ketemu!", Duration = 2 })
+        end
+    end,
+})
+
+TeleportTab:CreateSection("Keybind Teleport Field (T)")
+
+spawn(function()
+    while true do
+        if UserInputService:IsKeyDown(Enum.KeyCode.T) then
+            if selectedField then
+                Teleport(selectedField)
+            end
+            task.wait(0.5)
+        end
+        task.wait(0.05)
+    end
+end)
+
+TeleportTab:CreateSection("Teleport ke Hive Pribadi")
+
+TeleportTab:CreateButton({
+    Name = "🏠 Teleport ke Hive Saya",
+    Callback = function()
+        local success = TeleportToMyHive()
+        if success then
+            Rayfield:Notify({ Title = "Sukses", Content = "Teleported ke hive lo!", Duration = 2 })
+        else
+            Rayfield:Notify({ Title = "Error", Content = "Hive ga ketemu! Pastiin udah punya hive.", Duration = 3 })
+        end
+    end,
+})
+
+TeleportTab:CreateSection("Keybind Teleport Hive (H)")
+
+spawn(function()
+    while true do
+        if UserInputService:IsKeyDown(Enum.KeyCode.H) then
+            TeleportToMyHive()
+            task.wait(0.5)
+        end
+        task.wait(0.05)
+    end
+end)
+
+-- ==========================================
+-- TAB 2: PLAYER
+-- ==========================================
+local PlayerTab = Window:CreateTab("👤 Player", nil)
+
+PlayerTab:CreateSection("Walk Speed")
+
+PlayerTab:CreateInput({
+    Name = "Speed (Angka 16-500)",
+    CurrentValue = "50",
+    PlaceholderText = "Masukkan speed...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        local num = tonumber(Text)
+        if num and num >= 16 and num <= 500 then
+            targetSpeed = num
+            local char = player.Character
+            if char and char:FindFirstChild("Humanoid") then
+                char.Humanoid.WalkSpeed = num
+            end
+        end
+    end,
+})
+
+PlayerTab:CreateSlider({
+    Name = "Speed (Slider)",
+    Range = {16, 500},
+    Increment = 1,
+    CurrentValue = 50,
+    Callback = function(Value)
+        targetSpeed = Value
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.WalkSpeed = Value
+        end
+    end,
+})
+
+PlayerTab:CreateSection("Jump Power")
+
+PlayerTab:CreateInput({
+    Name = "Jump (Angka 50-500)",
+    CurrentValue = "100",
+    PlaceholderText = "Masukkan jump...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        local num = tonumber(Text)
+        if num and num >= 50 and num <= 500 then
+            targetJump = num
+            local char = player.Character
+            if char and char:FindFirstChild("Humanoid") then
+                char.Humanoid.JumpPower = num
+                char.Humanoid.UseJumpPower = true
+            end
+        end
+    end,
+})
+
+PlayerTab:CreateSlider({
+    Name = "Jump (Slider)",
+    Range = {50, 500},
+    Increment = 5,
+    CurrentValue = 100,
+    Callback = function(Value)
+        targetJump = Value
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.JumpPower = Value
+            char.Humanoid.UseJumpPower = true
+        end
+    end,
+})
+
+PlayerTab:CreateSection("Anti Reset")
+
+local antiResetToggle = PlayerTab:CreateToggle({
+    Name = "🔒 ANTI RESET (Heartbeat - 60x/detik)",
+    CurrentValue = true,
+    Callback = function(Value)
+        speedEnabled = Value
+        if Value then
+            StartAntiReset()
+            Rayfield:Notify({ Title = "Anti Reset", Content = "ON - Speed & Jump ga bakal keriset!", Duration = 2 })
+        else
+            StopAntiReset()
+            Rayfield:Notify({ Title = "Anti Reset", Content = "OFF - Balik normal", Duration = 2 })
+        end
+    end,
+})
+
+PlayerTab:CreateButton({
+    Name = "🔄 Reset ke Default (Speed 16, Jump 50)",
+    Callback = function()
+        targetSpeed = 16
+        targetJump = 50
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.WalkSpeed = 16
+            char.Humanoid.JumpPower = 50
+        end
+        Rayfield:Notify({ Title = "Reset", Content = "Speed & Jump balik normal!", Duration = 2 })
+    end,
+})
+
+-- ========== AUTO START ANTI RESET ==========
+StartAntiReset()
+
+-- ========== NOTIF ==========
+Rayfield:Notify({
+    Title = "XIOWUGPT Hub V2 Ready!",
+    Content = "T = Teleport Field | H = Teleport Hive\nAnti Reset: Heartbeat (60x/detik)\nHaste, mati, apapun GA BAKAL RESET!",
+    Duration = 5,
+})
