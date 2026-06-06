@@ -1,0 +1,394 @@
+-- [[ XIOWUGPT UNIVERSAL HUB - FINAL V3 ]]
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TeleportService = game:GetService("TeleportService")
+local CoreGui = game:GetService("CoreGui")
+
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+local camera = Workspace.CurrentCamera
+
+-- ========== VARIABLES ==========
+local speedEnabled = false
+local targetSpeed = 16
+local targetJump = 50
+local speedConnection = nil
+
+local noclipEnabled = false
+local flyEnabled = false
+local flySpeed = 50
+
+local ctrlClickTeleport = false
+
+local ESP_SETTINGS = {
+    Name = false,
+    Box = false,
+    Line = false,
+    Skeleton = false,
+    Color = Color3.fromRGB(255, 0, 0)
+}
+
+-- ========== CORE FUNCTIONS ==========
+local function StartAntiReset()
+    if speedConnection then speedConnection:Disconnect() end
+    
+    speedConnection = RunService.Heartbeat:Connect(function()
+        if not speedEnabled then return end
+        
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            local hum = char.Humanoid
+            if hum.WalkSpeed ~= targetSpeed then hum.WalkSpeed = targetSpeed end
+            if hum.JumpPower ~= targetJump then 
+                hum.JumpPower = targetJump
+                hum.UseJumpPower = true
+            end
+        end
+    end)
+end
+
+local function StopAntiReset()
+    if speedConnection then
+        speedConnection:Disconnect()
+        speedConnection = nil
+    end
+    local char = player.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.WalkSpeed = 16
+        char.Humanoid.JumpPower = 50
+    end
+end
+
+-- Noclip Loop
+RunService.Stepped:Connect(function()
+    if noclipEnabled and player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+-- Click Teleport
+mouse.Button1Down:Connect(function()
+    if ctrlClickTeleport and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local pos = mouse.Hit.Position
+        player.Character.HumanoidRootPart.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
+    end
+end)
+
+-- Fly Function
+local flyVelocity = nil
+local flyGyro = nil
+local flyConnection = nil
+
+local function ToggleFly(state)
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = char.HumanoidRootPart
+
+    if state then
+        flyVelocity = Instance.new("BodyVelocity")
+        flyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        flyVelocity.Parent = hrp
+        
+        flyGyro = Instance.new("BodyGyro")
+        flyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        flyGyro.P = 1000
+        flyGyro.D = 50
+        flyGyro.Parent = hrp
+
+        flyConnection = RunService.RenderStepped:Connect(function()
+            local moveVector = require(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule"):WaitForChild("ControlModule")):GetMoveVector()
+            flyGyro.CFrame = camera.CFrame
+            flyVelocity.Velocity = camera.CFrame:VectorToWorldSpace(moveVector * flySpeed)
+        end)
+    else
+        if flyVelocity then flyVelocity:Destroy() end
+        if flyGyro then flyGyro:Destroy() end
+        if flyConnection then flyConnection:Disconnect() end
+    end
+end
+
+-- ========== ESP SYSTEM ==========
+local espObjects = {}
+
+local function CreateESP(targetPlayer)
+    if targetPlayer == player then return end
+    
+    local objects = {
+        Name = Drawing.new("Text"),
+        Box = Drawing.new("Square"),
+        Line = Drawing.new("Line"),
+        Skeleton = {
+            HeadTorso = Drawing.new("Line"),
+            TorsoLArm = Drawing.new("Line"),
+            TorsoRArm = Drawing.new("Line"),
+            TorsoLLeg = Drawing.new("Line"),
+            TorsoRLeg = Drawing.new("Line"),
+        }
+    }
+    
+    objects.Name.Center = true
+    objects.Name.Outline = true
+    objects.Name.Color = ESP_SETTINGS.Color
+    
+    objects.Box.Thickness = 2
+    objects.Box.Color = ESP_SETTINGS.Color
+    objects.Box.Filled = false
+    
+    objects.Line.Thickness = 2
+    objects.Line.Color = ESP_SETTINGS.Color
+    
+    for _, bone in pairs(objects.Skeleton) do
+        bone.Thickness = 2
+        bone.Color = ESP_SETTINGS.Color
+    end
+    
+    espObjects[targetPlayer] = objects
+end
+
+local function RemoveESP(targetPlayer)
+    if espObjects[targetPlayer] then
+        for k, v in pairs(espObjects[targetPlayer]) do
+            if type(v) == "table" then
+                for _, bone in pairs(v) do bone:Remove() end
+            else
+                v:Remove()
+            end
+        end
+        espObjects[targetPlayer] = nil
+    end
+end
+
+for _, p in pairs(Players:GetPlayers()) do CreateESP(p) end
+Players.PlayerAdded:Connect(CreateESP)
+Players.PlayerRemoving:Connect(RemoveESP)
+
+RunService.RenderStepped:Connect(function()
+    for targetPlayer, objects in pairs(espObjects) do
+        local char = targetPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local head = char and char:FindFirstChild("Head")
+        
+        if char and hrp and head and targetPlayer.Character.Humanoid.Health > 0 then
+            local vector, onScreen = camera:WorldToViewportPoint(hrp.Position)
+            local headVector = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+            local legVector = camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+            
+            if onScreen then
+                -- Name
+                objects.Name.Visible = ESP_SETTINGS.Name
+                objects.Name.Position = Vector2.new(headVector.X, headVector.Y - 20)
+                objects.Name.Text = targetPlayer.Name
+                
+                -- Box
+                objects.Box.Visible = ESP_SETTINGS.Box
+                local boxHeight = legVector.Y - headVector.Y
+                local boxWidth = boxHeight / 2
+                objects.Box.Size = Vector2.new(boxWidth, boxHeight)
+                objects.Box.Position = Vector2.new(vector.X - boxWidth / 2, headVector.Y)
+                
+                -- Line (Tracer)
+                objects.Line.Visible = ESP_SETTINGS.Line
+                objects.Line.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
+                objects.Line.To = Vector2.new(vector.X, legVector.Y)
+                
+                -- Skeleton (Basic Representation)
+                local drawSkels = ESP_SETTINGS.Skeleton
+                for _, bone in pairs(objects.Skeleton) do bone.Visible = drawSkels end
+                
+                if drawSkels then
+                    -- Simplified connection mapping for R6/R15
+                    objects.Skeleton.HeadTorso.From = Vector2.new(headVector.X, headVector.Y)
+                    objects.Skeleton.HeadTorso.To = Vector2.new(vector.X, vector.Y)
+                    
+                    local rightArm = char:FindFirstChild("Right Arm") or char:FindFirstChild("RightHand")
+                    local leftArm = char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftHand")
+                    local rightLeg = char:FindFirstChild("Right Leg") or char:FindFirstChild("RightFoot")
+                    local leftLeg = char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftFoot")
+                    
+                    if rightArm then
+                        local p = camera:WorldToViewportPoint(rightArm.Position)
+                        objects.Skeleton.TorsoRArm.From = Vector2.new(vector.X, vector.Y)
+                        objects.Skeleton.TorsoRArm.To = Vector2.new(p.X, p.Y)
+                    end
+                    if leftArm then
+                        local p = camera:WorldToViewportPoint(leftArm.Position)
+                        objects.Skeleton.TorsoLArm.From = Vector2.new(vector.X, vector.Y)
+                        objects.Skeleton.TorsoLArm.To = Vector2.new(p.X, p.Y)
+                    end
+                    if rightLeg then
+                        local p = camera:WorldToViewportPoint(rightLeg.Position)
+                        objects.Skeleton.TorsoRLeg.From = Vector2.new(vector.X, vector.Y)
+                        objects.Skeleton.TorsoRLeg.To = Vector2.new(p.X, p.Y)
+                    end
+                    if leftLeg then
+                        local p = camera:WorldToViewportPoint(leftLeg.Position)
+                        objects.Skeleton.TorsoLLeg.From = Vector2.new(vector.X, vector.Y)
+                        objects.Skeleton.TorsoLLeg.To = Vector2.new(p.X, p.Y)
+                    end
+                end
+            else
+                objects.Name.Visible = false
+                objects.Box.Visible = false
+                objects.Line.Visible = false
+                for _, bone in pairs(objects.Skeleton) do bone.Visible = false end
+            end
+        else
+            objects.Name.Visible = false
+            objects.Box.Visible = false
+            objects.Line.Visible = false
+            for _, bone in pairs(objects.Skeleton) do bone.Visible = false end
+        end
+    end
+end)
+
+-- ========== LOAD RAYFIELD ==========
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "XIOWUGPT | Universal Hub",
+    LoadingTitle = "XIOWUGPT Loading...",
+    LoadingSubtitle = "by XIOWU DEVELOPER",
+    Theme = "DarkBlue",
+    ConfigurationSaving = { Enabled = false },
+    KeySystem = false
+})
+
+-- ==========================================
+-- TAB 1: MAIN
+-- ==========================================
+local MainTab = Window:CreateTab("🚀 Main", nil)
+
+MainTab:CreateToggle({
+    Name = "Ctrl + Click Teleport",
+    CurrentValue = false,
+    Callback = function(Value)
+        ctrlClickTeleport = Value
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Fly Hack",
+    CurrentValue = false,
+    Callback = function(Value)
+        flyEnabled = Value
+        ToggleFly(Value)
+    end,
+})
+
+MainTab:CreateSlider({
+    Name = "Fly Speed",
+    Range = {10, 500},
+    Increment = 1,
+    CurrentValue = 50,
+    Callback = function(Value)
+        flySpeed = Value
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Speed Hack (Anti-Reset)",
+    CurrentValue = false,
+    Callback = function(Value)
+        speedEnabled = Value
+        if Value then StartAntiReset() else StopAntiReset() end
+    end,
+})
+
+MainTab:CreateSlider({
+    Name = "Walk Speed",
+    Range = {16, 500},
+    Increment = 1,
+    CurrentValue = 16,
+    Callback = function(Value)
+        targetSpeed = Value
+    end,
+})
+
+MainTab:CreateSlider({
+    Name = "Jump Power",
+    Range = {50, 500},
+    Increment = 1,
+    CurrentValue = 50,
+    Callback = function(Value)
+        targetJump = Value
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Noclip",
+    CurrentValue = false,
+    Callback = function(Value)
+        noclipEnabled = Value
+    end,
+})
+
+-- ==========================================
+-- TAB 2: PLAYER (ESP)
+-- ==========================================
+local PlayerTab = Window:CreateTab("👁️ Player", nil)
+
+PlayerTab:CreateToggle({
+    Name = "ESP Name",
+    CurrentValue = false,
+    Callback = function(Value)
+        ESP_SETTINGS.Name = Value
+    end,
+})
+
+PlayerTab:CreateToggle({
+    Name = "ESP Line (Tracers)",
+    CurrentValue = false,
+    Callback = function(Value)
+        ESP_SETTINGS.Line = Value
+    end,
+})
+
+PlayerTab:CreateToggle({
+    Name = "ESP Box",
+    CurrentValue = false,
+    Callback = function(Value)
+        ESP_SETTINGS.Box = Value
+    end,
+})
+
+PlayerTab:CreateToggle({
+    Name = "ESP Skeleton",
+    CurrentValue = false,
+    Callback = function(Value)
+        ESP_SETTINGS.Skeleton = Value
+    end,
+})
+
+-- ==========================================
+-- TAB 3: SETTING
+-- ==========================================
+local SettingTab = Window:CreateTab("⚙️ Setting", nil)
+
+SettingTab:CreateLabel("Menu Keybind: K (Fixed)")
+
+SettingTab:CreateButton({
+    Name = "Destroy GUI", 
+    Callback = function()
+    Rayfield:Destroy() 
+    end
+})
+
+SettingTab:CreateButton({
+    Name = "Rejoin Map",
+    Callback = function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
+    end,
+})
+
+Rayfield:Notify({
+    Title = "Universal Hub Ready!",
+    Content = "All features loaded.",
+    Duration = 3,
+})
